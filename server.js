@@ -270,7 +270,7 @@ app.post('/api/reservations', requireAuth, async (req, res) => {
       'SELECT COUNT(*) as cnt FROM reservations WHERE date = $1 AND start_time < $2 AND end_time > $3',
       [date, end_time, start_time]
     );
-    if (+overlap[0].cnt > 0) return res.status(400).json({ error: '해당 시간에 이미 예약이 있습니다.' });
+    if (+overlap[0].cnt >= 4) return res.status(400).json({ error: '해당 시간에 최대 4명까지만 예약 가능합니다. (현재 4명 예약됨)' });
 
     // 주간 사용시간 제한 비활성화 (필요시 주석 해제)
     // const { rows: userRows } = await pool.query('SELECT advisor FROM users WHERE id = $1', [req.session.userId]);
