@@ -279,6 +279,7 @@
       <span id="user-display"></span>
       <div class="header-btns">
         <button class="header-btn active-tab" id="btn-calendar" onclick="showView('calendar')">예약 현황</button>
+        <button class="header-btn" style="background:rgba(231,76,60,0.3); border-color:rgba(231,76,60,0.6);" onclick="showNotice()">주의사항</button>
         <button class="header-btn" id="btn-admin" onclick="showView('admin')" style="display:none;">관리자</button>
         <button class="header-btn" onclick="handleLogout()">로그아웃</button>
       </div>
@@ -589,9 +590,6 @@ function showApp() {
   document.getElementById('btn-admin').style.display = isAdmin ? '' : 'none';
   document.getElementById('user-display').textContent =
     isAdmin ? `${currentUser.name} (관리자)` : `${currentUser.name} (${currentUser.advisor} 교수님)`;
-
-  // Show notice on every login
-  showNotice();
 
   showView('calendar');
   renderCalendar();
