@@ -6,26 +6,19 @@ const path = require('path');
 
 const app = express();
 
-// Support both DATABASE_URL and individual params
-const dbUrl = process.env.DATABASE_URL;
-let pool;
-if (process.env.DB_HOST) {
-  pool = new Pool({
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || '6543'),
-    database: process.env.DB_NAME || 'postgres',
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    ssl: { rejectUnauthorized: false }
-  });
-  console.log('DB 개별 파라미터 연결:', process.env.DB_HOST);
-} else {
-  pool = new Pool({
-    connectionString: dbUrl,
-    ssl: { rejectUnauthorized: false }
-  });
-  console.log('DATABASE_URL 연결');
-}
+// Build connection URL from individual params to handle special chars
+const dbHost = process.env.DB_HOST;
+const dbPort = process.env.DB_PORT || '6543';
+const dbName = process.env.DB_NAME || 'postgres';
+const dbUser = encodeURIComponent(process.env.DB_USER || '');
+const dbPass = encodeURIComponent(process.env.DB_PASSWORD || '');
+const connStr = process.env.DATABASE_URL || `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
+console.log('DB 연결:', connStr.replace(/\/\/.*:.*@/, '//***:***@'));
+
+const pool = new Pool({
+  connectionString: connStr,
+  ssl: { rejectUnauthorized: false }
+});
 
 // Create tables
 async function initDB() {
