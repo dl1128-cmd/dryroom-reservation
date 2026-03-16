@@ -56,7 +56,9 @@ async function initDB() {
   }
 }
 
-initDB().catch(console.error);
+initDB()
+  .then(() => console.log('DB 초기화 성공'))
+  .catch(err => console.error('DB 초기화 실패:', err.message));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -96,7 +98,7 @@ app.post('/api/register', async (req, res) => {
       [username, hashed, name, phone, advisor, 'user', 0]
     );
     res.json({ success: true, pending: true });
-  } catch (err) { res.status(500).json({ error: '서버 오류' }); }
+  } catch (err) { console.error('API 오류:', err.message); res.status(500).json({ error: '서버 오류: ' + err.message }); }
 });
 
 app.post('/api/login', async (req, res) => {
@@ -111,7 +113,7 @@ app.post('/api/login', async (req, res) => {
 
     req.session.userId = user.id;
     res.json({ success: true, user: { id: user.id, name: user.name, advisor: user.advisor, role: user.role } });
-  } catch (err) { res.status(500).json({ error: '서버 오류' }); }
+  } catch (err) { console.error('API 오류:', err.message); res.status(500).json({ error: '서버 오류: ' + err.message }); }
 });
 
 app.post('/api/logout', (req, res) => { req.session.destroy(); res.json({ success: true }); });
@@ -292,7 +294,7 @@ app.post('/api/reservations', requireAuth, async (req, res) => {
       [req.session.userId, date, start_time, end_time, purpose || '']
     );
     res.json({ success: true, id: rows[0].id });
-  } catch (err) { res.status(500).json({ error: '서버 오류' }); }
+  } catch (err) { console.error('API 오류:', err.message); res.status(500).json({ error: '서버 오류: ' + err.message }); }
 });
 
 app.delete('/api/reservations/:id', requireAuth, async (req, res) => {
