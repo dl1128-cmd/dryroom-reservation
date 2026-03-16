@@ -591,6 +591,7 @@ function showApp() {
   document.getElementById('user-display').textContent =
     isAdmin ? `${currentUser.name} (관리자)` : `${currentUser.name} (${currentUser.advisor} 교수님)`;
 
+  showNotice();
   showView('calendar');
   renderCalendar();
   loadReservations();
