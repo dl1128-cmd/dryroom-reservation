@@ -52,7 +52,7 @@ async function initDB() {
 
 initDB()
   .then(() => console.log('DB 초기화 성공'))
-  .catch(err => console.error('DB 초기화 실패:', err.message));
+  .catch(err => console.error('DB 초기화 실패:', err.message || err.code || JSON.stringify(err)));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
