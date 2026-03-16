@@ -6,17 +6,14 @@ const path = require('path');
 
 const app = express();
 
-// Build connection URL from individual params to handle special chars
-const dbHost = process.env.DB_HOST;
-const dbPort = process.env.DB_PORT || '6543';
-const dbName = process.env.DB_NAME || 'postgres';
-const dbUser = encodeURIComponent(process.env.DB_USER || '');
-const dbPass = encodeURIComponent(process.env.DB_PASSWORD || '');
-const connStr = process.env.DATABASE_URL || `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
-console.log('DB 연결:', connStr.replace(/\/\/.*:.*@/, '//***:***@'));
+console.log('ENV 확인 - DB_HOST:', process.env.DB_HOST, 'DB_USER:', process.env.DB_USER);
 
 const pool = new Pool({
-  connectionString: connStr,
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '6543'),
+  database: process.env.DB_NAME || 'postgres',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }
 });
 
