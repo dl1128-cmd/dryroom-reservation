@@ -6,17 +6,16 @@ const path = require('path');
 
 const app = express();
 
-const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) {
-  console.error('ERROR: DATABASE_URL 환경 변수가 설정되지 않았습니다!');
-} else {
-  console.log('DATABASE_URL 설정됨:', dbUrl.replace(/\/\/.*:.*@/, '//***:***@'));
-}
-
 const pool = new Pool({
-  connectionString: dbUrl,
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '6543'),
+  database: process.env.DB_NAME || 'postgres',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   ssl: { rejectUnauthorized: false }
 });
+
+console.log('DB 연결 정보:', process.env.DB_HOST, process.env.DB_USER);
 
 // Create tables
 async function initDB() {
