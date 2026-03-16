@@ -288,7 +288,7 @@
 
   <!-- ── Calendar View ── -->
   <div id="calendar-view" class="main-container">
-    <div class="usage-card">
+    <div class="usage-card" style="display:none;">
       <h3 id="usage-title">주간 사용량</h3>
       <div class="usage-bar-wrap">
         <div class="usage-bar" id="usage-bar" style="width:0%"></div>
@@ -626,7 +626,7 @@ async function loadUsage() {
         detailHtml = '이번 주 예약 없음';
       }
       document.getElementById('usage-detail').innerHTML = detailHtml;
-      document.querySelector('.usage-card').style.display = '';
+      // document.querySelector('.usage-card').style.display = '';
     } else {
       const data = await api(`/api/advisor-usage?advisor=${encodeURIComponent(currentUser.advisor)}&week_start=${currentWeekStart}`);
       const pct = Math.round((data.used_minutes / data.limit_minutes) * 100);
@@ -636,7 +636,7 @@ async function loadUsage() {
       document.getElementById('usage-text').textContent = `${data.used_minutes}분 / ${data.limit_minutes}분 (${pct}%)`;
       document.getElementById('usage-title').textContent = `${currentUser.advisor} 교수님 연구실 - 주간 드라이룸 사용량`;
       document.getElementById('usage-detail').textContent = `잔여: ${data.remaining_minutes}분`;
-      document.querySelector('.usage-card').style.display = '';
+      // document.querySelector('.usage-card').style.display = '';
     }
   } catch {}
 }
