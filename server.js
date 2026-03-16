@@ -272,16 +272,16 @@ app.post('/api/reservations', requireAuth, async (req, res) => {
     );
     if (+overlap[0].cnt > 0) return res.status(400).json({ error: '해당 시간에 이미 예약이 있습니다.' });
 
-    const { rows: userRows } = await pool.query('SELECT advisor FROM users WHERE id = $1', [req.session.userId]);
-    const advisor = userRows[0].advisor;
-    const weekStart = getWeekStart(date);
-    const weekEnd = getWeekEnd(weekStart);
-    const currentMinutes = await getAdvisorWeeklyMinutes(advisor, weekStart, weekEnd);
-
-    if (currentMinutes + duration > 180) {
-      const remaining = Math.max(0, 180 - currentMinutes);
-      return res.status(400).json({ error: `${advisor} 교수님 연구실의 이번 주 잔여 시간: ${remaining}분 (최대 3시간/주). 요청: ${duration}분` });
-    }
+    // 주간 사용시간 제한 비활성화 (필요시 주석 해제)
+    // const { rows: userRows } = await pool.query('SELECT advisor FROM users WHERE id = $1', [req.session.userId]);
+    // const advisor = userRows[0].advisor;
+    // const weekStart = getWeekStart(date);
+    // const weekEnd = getWeekEnd(weekStart);
+    // const currentMinutes = await getAdvisorWeeklyMinutes(advisor, weekStart, weekEnd);
+    // if (currentMinutes + duration > 180) {
+    //   const remaining = Math.max(0, 180 - currentMinutes);
+    //   return res.status(400).json({ error: `${advisor} 교수님 연구실의 이번 주 잔여 시간: ${remaining}분 (최대 3시간/주). 요청: ${duration}분` });
+    // }
 
     const { rows } = await pool.query(
       'INSERT INTO reservations (user_id, date, start_time, end_time, purpose) VALUES ($1,$2,$3,$4,$5) RETURNING id',
