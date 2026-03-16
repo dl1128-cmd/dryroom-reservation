@@ -6,16 +6,15 @@ const path = require('path');
 
 const app = express();
 
-console.log('ENV 확인 - DB_HOST:', process.env.DB_HOST, 'DB_USER:', process.env.DB_USER);
+const dbHost = process.env.DB_HOST || '';
+const dbPort = process.env.DB_PORT || '6543';
+const dbName = process.env.DB_NAME || 'postgres';
+const dbUser = encodeURIComponent(process.env.DB_USER || '');
+const dbPass = encodeURIComponent(process.env.DB_PASSWORD || '');
+const connStr = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}?sslmode=require`;
+console.log('DB 연결:', connStr.replace(/\/\/.*:.*@/, '//***:***@'));
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '6543'),
-  database: process.env.DB_NAME || 'postgres',
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false }
-});
+const pool = new Pool({ connectionString: connStr });
 
 // Create tables
 async function initDB() {
