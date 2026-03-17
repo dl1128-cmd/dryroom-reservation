@@ -792,6 +792,7 @@ function showDetail(r) {
     ${isMine && !isAdmin && r.date >= formatDate(new Date()) ? `<button class="btn-danger" onclick="cancelReservation(${r.id}, false)">예약 취소</button>` : ''}
     ${isMine && !isAdmin && r.date < formatDate(new Date()) ? `<p style="color:#999; margin-top:12px; font-size:0.85rem;">지난 예약은 수정/삭제할 수 없습니다.</p>` : ''}
     ${isAdmin ? `<button class="btn-danger" onclick="cancelReservation(${r.id}, true)">관리자 삭제</button>` : ''}
+    ${r.date >= formatDate(new Date()) ? `<button class="btn-primary" style="margin-top:8px;" onclick="closeModal('detail-modal'); openNewModal('${r.date}', '${r.start_time}')">이 시간에 예약하기</button>` : ''}
   `;
   document.getElementById('detail-modal').classList.add('active');
 }
