@@ -694,6 +694,16 @@ setInterval(renderNowLine, 60000);
 
 function renderReservations() {
   document.querySelectorAll('.reservation-block').forEach(el => el.remove());
+
+  // Group overlapping reservations by date+hour to arrange side by side
+  const groups = {};
+  reservations.forEach(r => {
+    const [sh] = r.start_time.split(':').map(Number);
+    const key = `${r.date}_${sh}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+
   reservations.forEach(r => {
     const [sh, sm] = r.start_time.split(':').map(Number);
     const [eh, em] = r.end_time.split(':').map(Number);
@@ -701,16 +711,29 @@ function renderReservations() {
     const cells = document.querySelectorAll(`.calendar-cell[data-date="${r.date}"][data-hour="${sh}"]`);
     if (!cells.length) return;
 
+    const key = `${r.date}_${sh}`;
+    const group = groups[key];
+    const idx = group.indexOf(r);
+    const total = group.length;
+
     const durationMin = (eh * 60 + em) - (sh * 60 + sm);
     const heightPx = (durationMin / 60) * 48;
     const topPx = (sm / 60) * 48;
     const isMine = currentUser && r.user_id === currentUser.id;
 
+    const widthPct = 100 / total;
+    const leftPct = widthPct * idx;
+
     const block = document.createElement('div');
     block.className = 'reservation-block' + (isMine ? ' mine' : '');
     block.style.top = topPx + 'px';
     block.style.height = Math.max(heightPx - 2, 14) + 'px';
-    block.textContent = `${r.user_name} ${r.start_time}-${r.end_time}`;
+    block.style.left = leftPct + '%';
+    block.style.width = `calc(${widthPct}% - 2px)`;
+    block.style.right = 'auto';
+    block.style.fontSize = total > 2 ? '0.55rem' : '0.7rem';
+    block.textContent = `${r.user_name}`;
+    block.title = `${r.user_name} ${r.start_time}-${r.end_time}`;
     block.onclick = (e) => { e.stopPropagation(); showDetail(r); };
     cells[0].appendChild(block);
   });
