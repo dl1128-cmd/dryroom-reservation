@@ -38,6 +38,14 @@ async function initDB() {
     );
   `);
 
+  // ── Migration: equipment column (dryroom/xrd) ──
+  await pool.query(`
+    ALTER TABLE reservations
+      ADD COLUMN IF NOT EXISTS equipment TEXT NOT NULL DEFAULT 'dryroom';
+  `);
+  // Backfill any NULLs (defensive — DEFAULT covers new rows)
+  await pool.query(`UPDATE reservations SET equipment = 'dryroom' WHERE equipment IS NULL`);
+
   // Create or update admin account
   const adminPass = process.env.ADMIN_PASSWORD || 'eeml9117as';
   const hashed = bcrypt.hashSync(adminPass, 10);
@@ -244,20 +252,33 @@ async function getAdvisorWeeklyMinutes(advisor, weekStart, weekEnd, excludeId) {
 }
 
 app.get('/api/reservations', requireAuth, async (req, res) => {
-  const { date, week_start } = req.query;
-  let query = `SELECT r.*, u.name as user_name, u.advisor FROM reservations r JOIN users u ON r.user_id = u.id`;
+  const { date, week_start, equipment } = req.query;
+  let query = `SELECT r.*, u.name as user_name, u.advisor FROM reservations r JOIN users u ON r.user_id = u.id WHERE 1=1`;
   const params = [];
-  if (date) { query += ' WHERE r.date = $1'; params.push(date); }
-  else if (week_start) { const we = getWeekEnd(week_start); query += ' WHERE r.date >= $1 AND r.date <= $2'; params.push(week_start, we); }
+  let idx = 1;
+  if (date) { query += ` AND r.date = $${idx++}`; params.push(date); }
+  else if (week_start) { const we = getWeekEnd(week_start); query += ` AND r.date >= $${idx++} AND r.date <= $${idx++}`; params.push(week_start, we); }
+  if (equipment === 'dryroom' || equipment === 'xrd') {
+    query += ` AND r.equipment = $${idx++}`;
+    params.push(equipment);
+  }
   query += ' ORDER BY r.date, r.start_time';
   const { rows } = await pool.query(query, params);
   res.json(rows);
 });
 
 app.post('/api/reservations', requireAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { date, start_time, end_time, purpose } = req.body;
+    const equipment = req.body.equipment || 'dryroom';
     if (!date || !start_time || !end_time) return res.status(400).json({ error: '날짜와 시간을 입력해주세요.' });
+    if (equipment !== 'dryroom' && equipment !== 'xrd') {
+      return res.status(400).json({ error: '잘못된 장비 유형입니다.' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start_time) || !/^\d{2}:\d{2}$/.test(end_time)) {
+      return res.status(400).json({ error: '날짜 또는 시간 형식이 올바르지 않습니다.' });
+    }
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const resDate = new Date(date + 'T00:00:00');
@@ -270,29 +291,46 @@ app.post('/api/reservations', requireAuth, async (req, res) => {
     const duration = (eh * 60 + em) - (sh * 60 + sm);
     if (duration <= 0) return res.status(400).json({ error: '종료 시간은 시작 시간보다 뒤여야 합니다.' });
 
-    const { rows: overlap } = await pool.query(
+    // ── 트랜잭션 + advisory lock: 같은 날짜의 예약을 직렬화하여 race condition 방지 ──
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [date]);
+
+    // 통합 4인 제한: dryroom + xrd 합계 (XRD 사용자도 드라이룸 인원에 포함)
+    const { rows: totalOverlap } = await client.query(
       'SELECT COUNT(*) as cnt FROM reservations WHERE date = $1 AND start_time < $2 AND end_time > $3',
       [date, end_time, start_time]
     );
-    if (+overlap[0].cnt >= 4) return res.status(400).json({ error: '해당 시간에 최대 4명까지만 예약 가능합니다. (현재 4명 예약됨)' });
+    if (+totalOverlap[0].cnt >= 4) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: '해당 시간에 드라이룸 동시 사용 인원이 최대 4명을 초과합니다. (현재 4명 예약됨, XRD 사용자 포함)' });
+    }
 
-    // 주간 사용시간 제한 비활성화 (필요시 주석 해제)
-    // const { rows: userRows } = await pool.query('SELECT advisor FROM users WHERE id = $1', [req.session.userId]);
-    // const advisor = userRows[0].advisor;
-    // const weekStart = getWeekStart(date);
-    // const weekEnd = getWeekEnd(weekStart);
-    // const currentMinutes = await getAdvisorWeeklyMinutes(advisor, weekStart, weekEnd);
-    // if (currentMinutes + duration > 180) {
-    //   const remaining = Math.max(0, 180 - currentMinutes);
-    //   return res.status(400).json({ error: `${advisor} 교수님 연구실의 이번 주 잔여 시간: ${remaining}분 (최대 3시간/주). 요청: ${duration}분` });
-    // }
+    // XRD 단독 1명 제한
+    if (equipment === 'xrd') {
+      const { rows: xrdOverlap } = await client.query(
+        `SELECT COUNT(*) as cnt FROM reservations
+         WHERE date = $1 AND start_time < $2 AND end_time > $3 AND equipment = 'xrd'`,
+        [date, end_time, start_time]
+      );
+      if (+xrdOverlap[0].cnt >= 1) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: '해당 시간에 XRD가 이미 예약되어 있습니다. (XRD는 동시에 1명만 사용 가능)' });
+      }
+    }
 
-    const { rows } = await pool.query(
-      'INSERT INTO reservations (user_id, date, start_time, end_time, purpose) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [req.session.userId, date, start_time, end_time, purpose || '']
+    const { rows } = await client.query(
+      'INSERT INTO reservations (user_id, date, start_time, end_time, purpose, equipment) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [req.session.userId, date, start_time, end_time, purpose || '', equipment]
     );
+    await client.query('COMMIT');
     res.json({ success: true, id: rows[0].id });
-  } catch (err) { console.error('API 오류:', err.message); res.status(500).json({ error: '서버 오류: ' + err.message }); }
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('API 오류:', err.message);
+    res.status(500).json({ error: '예약 처리 중 오류가 발생했습니다.' });
+  } finally {
+    client.release();
+  }
 });
 
 app.delete('/api/reservations/:id', requireAuth, async (req, res) => {
@@ -317,4 +355,4 @@ app.get('/api/advisor-usage', requireAuth, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => { console.log(`SEM 예약 시스템이 http://localhost:${PORT} 에서 실행 중입니다.`); });
+app.listen(PORT, () => { console.log(`드라이룸/XRD 예약 시스템이 http://localhost:${PORT} 에서 실행 중입니다.`); });

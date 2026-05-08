@@ -3,3 +3,4 @@ sem.db
 sem.db-shm
 sem.db-wal
 cookies.txt
+.omc/

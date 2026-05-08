@@ -122,7 +122,32 @@
     .now-line::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; background: #e74c3c; border-radius: 50%; }
     .reservation-block { position: absolute; left: 2px; right: 2px; color: white; border-radius: 4px; padding: 2px 6px; font-size: 0.7rem; overflow: hidden; cursor: pointer; z-index: 2; line-height: 1.3; }
     .reservation-block.mine { outline: 2px solid #222; outline-offset: -1px; }
+    .reservation-block.xrd {
+      background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0 6px, transparent 6px 12px);
+      border: 1.5px dashed rgba(255,255,255,0.85);
+    }
+    .reservation-block.dimmed { opacity: 0.35; }
+    .reservation-block.dimmed:hover { opacity: 0.6; }
     .reservation-block:hover { opacity: 0.85; }
+
+    /* ── Equipment Tabs ── */
+    .equipment-tabs {
+      display: flex; gap: 8px; background: white; border-radius: 12px;
+      padding: 8px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .equipment-tab {
+      flex: 1; padding: 12px 18px; border: 2px solid transparent;
+      background: #f0f2f5; color: #555; border-radius: 8px;
+      cursor: pointer; font-size: 0.95rem; font-weight: 600;
+      transition: all 0.18s;
+    }
+    .equipment-tab:hover { background: #e0e3e8; }
+    .equipment-tab.active.dryroom { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+    .equipment-tab.active.xrd { background: #6c3483; color: white; border-color: #6c3483; }
+    .equipment-tab .tab-sub { display: block; font-size: 0.72rem; font-weight: 400; opacity: 0.85; margin-top: 2px; }
+
+    .badge-equipment-dryroom { background: #d6dbe8; color: #1a1a2e; }
+    .badge-equipment-xrd { background: #e8d5f1; color: #6c3483; }
     .color-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 10px; font-size: 0.8rem; align-items: center; }
     .color-legend-title { font-weight: 600; color: #555; margin-right: 4px; }
     .color-legend-item { display: flex; align-items: center; gap: 5px; }
@@ -279,7 +304,7 @@
 <!-- ── App Screen ── -->
 <div id="app-screen" style="display:none;">
   <header>
-    <h1>가천대학교 화공생명배터리공학부 드라이룸 예약 시스템</h1>
+    <h1>가천대학교 화공생명배터리공학부 드라이룸 / XRD 예약 시스템</h1>
     <div class="user-info">
       <span id="user-display"></span>
       <div class="header-btns">
@@ -293,6 +318,18 @@
 
   <!-- ── Calendar View ── -->
   <div id="calendar-view" class="main-container">
+    <!-- ── Equipment Tabs ── -->
+    <div class="equipment-tabs">
+      <button class="equipment-tab dryroom active" id="eq-tab-dryroom" onclick="switchEquipment('dryroom')">
+        드라이룸
+        <span class="tab-sub">동시 사용 최대 4명</span>
+      </button>
+      <button class="equipment-tab xrd" id="eq-tab-xrd" onclick="switchEquipment('xrd')">
+        XRD
+        <span class="tab-sub">동시 1명 (드라이룸 4인 제한 포함)</span>
+      </button>
+    </div>
+
     <div class="usage-card" style="display:none;">
       <h3 id="usage-title">주간 사용량</h3>
       <div class="usage-bar-wrap">
@@ -369,7 +406,7 @@
         <button class="btn-primary" onclick="loadAdminReservations()" style="height:42px;">검색</button>
       </div>
       <table class="admin-table">
-        <thead><tr><th>날짜</th><th>시간</th><th>예약자</th><th>지도교수</th><th>목적</th><th>관리</th></tr></thead>
+        <thead><tr><th>날짜</th><th>시간</th><th>장비</th><th>예약자</th><th>지도교수</th><th>목적</th><th>관리</th></tr></thead>
         <tbody id="reservations-tbody"></tbody>
       </table>
     </div>
@@ -380,11 +417,18 @@
 <div class="modal-overlay" id="new-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3>예약 등록</h3>
+      <h3 id="new-modal-title">예약 등록</h3>
       <button class="modal-close" onclick="closeModal('new-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <form onsubmit="handleNewReservation(event)">
+        <div class="form-group">
+          <label>장비</label>
+          <select id="new-equipment" required>
+            <option value="dryroom">드라이룸 (동시 4명)</option>
+            <option value="xrd">XRD (동시 1명, 드라이룸 4인 제한 포함)</option>
+          </select>
+        </div>
         <div class="form-group">
           <label>날짜</label>
           <input type="date" id="new-date" required>
@@ -399,7 +443,7 @@
         </div>
         <div class="form-group">
           <label>사용 목적</label>
-          <input type="text" id="new-purpose" placeholder="예: 전극 건조, 셀 조립 등">
+          <input type="text" id="new-purpose" placeholder="예: 전극 건조, 셀 조립, XRD 측정 등">
         </div>
         <button type="submit" class="btn-primary">예약하기</button>
       </form>
@@ -428,7 +472,8 @@
       <ol>
         <li><strong>모든 사용은 예약 필수</strong> (시간/목적/반입물 기재)</li>
         <li><strong>예약자만 출입</strong> (대리 출입 금지)</li>
-        <li><strong>동시 작업은 최대 4인까지만</strong> (5인 이상 예약 불가)</li>
+        <li><strong>동시 작업은 최대 4인까지만</strong> (5인 이상 예약 불가, <strong>XRD 사용자도 인원에 포함</strong>)</li>
+        <li><strong>XRD 예약</strong>은 동시에 1명만 가능하며, 드라이룸 4인 제한에 함께 카운트됩니다.</li>
         <li><strong>출입문 개방 최소화:</strong> 출입은 "한 번에", 왕복 금지</li>
         <li><strong>젖은(wet) 샘플, 수계 용액, 수분 흡착된 시료 및 장비 반입 금지</strong></li>
         <li><strong>사용 전/후</strong> 아래의 링크에서 기록 및 사진 증빙<br>
@@ -451,10 +496,13 @@
 let currentUser = null;
 let currentWeekStart = getMonday(new Date());
 let reservations = [];
+let currentEquipment = 'dryroom'; // 'dryroom' | 'xrd'
 
 const HOUR_START = 0;
 const HOUR_END = 24;
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+
+const EQUIPMENT_LABEL = { dryroom: '드라이룸', xrd: 'XRD' };
 
 // ── User Color Mapping ──
 const USER_COLORS = [
@@ -529,6 +577,11 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// JS 문자열 리터럴 안에 안전하게 임베드 (작은따옴표/역슬래시/줄바꿈 처리)
+function escapeJsAttr(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
 // ── Auth ──
@@ -679,10 +732,22 @@ async function loadUsage() {
 
 async function loadReservations() {
   try {
+    // 모든 장비 예약을 가져와서 인원 제한 가시성을 확보 (현재 탭이 아닌 장비는 dimmed로 표시)
     reservations = await api(`/api/reservations?week_start=${currentWeekStart}`);
     renderReservations();
     renderNowLine();
   } catch {}
+}
+
+// ── Equipment Tab Switching ──
+function switchEquipment(eq) {
+  if (eq !== 'dryroom' && eq !== 'xrd') return;
+  currentEquipment = eq;
+  const dryTab = document.getElementById('eq-tab-dryroom');
+  const xrdTab = document.getElementById('eq-tab-xrd');
+  dryTab.classList.toggle('active', eq === 'dryroom');
+  xrdTab.classList.toggle('active', eq === 'xrd');
+  loadReservations();
 }
 
 // ── Calendar ──
@@ -761,7 +826,12 @@ function renderReservations() {
     const leftPct = widthPct * idx;
 
     const block = document.createElement('div');
-    block.className = 'reservation-block' + (isMine ? ' mine' : '');
+    const isXrd = r.equipment === 'xrd';
+    const isOtherTab = (r.equipment || 'dryroom') !== currentEquipment;
+    block.className = 'reservation-block'
+      + (isMine ? ' mine' : '')
+      + (isXrd ? ' xrd' : '')
+      + (isOtherTab ? ' dimmed' : '');
     block.style.top = topPx + 'px';
     block.style.height = Math.max(heightPx - 2, 14) + 'px';
     block.style.left = leftPct + '%';
@@ -769,8 +839,8 @@ function renderReservations() {
     block.style.right = 'auto';
     block.style.fontSize = total > 2 ? '0.55rem' : '0.7rem';
     block.style.background = getUserColor(r.user_id);
-    block.textContent = `${r.user_name}`;
-    block.title = `${r.user_name} ${r.start_time}-${r.end_time}`;
+    block.textContent = isXrd ? `[XRD] ${r.user_name}` : `${r.user_name}`;
+    block.title = `${EQUIPMENT_LABEL[r.equipment] || '드라이룸'} | ${r.user_name} ${r.start_time}-${r.end_time}`;
     block.onclick = (e) => { e.stopPropagation(); showDetail(r); };
     cells[0].appendChild(block);
   });
@@ -791,6 +861,9 @@ function openNewModal(date, time) {
   const [h] = time.split(':').map(Number);
   document.getElementById('new-end').value = String(Math.min(h + 1, HOUR_END)).padStart(2, '0') + ':00';
   document.getElementById('new-purpose').value = '';
+  document.getElementById('new-equipment').value = currentEquipment;
+  document.getElementById('new-modal-title').textContent =
+    `예약 등록 (${EQUIPMENT_LABEL[currentEquipment]})`;
   document.getElementById('new-modal').classList.add('active');
 }
 
@@ -805,7 +878,8 @@ async function handleNewReservation(e) {
         date: document.getElementById('new-date').value,
         start_time: document.getElementById('new-start').value,
         end_time: document.getElementById('new-end').value,
-        purpose: document.getElementById('new-purpose').value
+        purpose: document.getElementById('new-purpose').value,
+        equipment: document.getElementById('new-equipment').value
       })
     });
     closeModal('new-modal');
@@ -821,7 +895,10 @@ function showDetail(r) {
   const isMine = currentUser && r.user_id === currentUser.id;
   const isAdmin = currentUser && currentUser.role === 'admin';
   const body = document.getElementById('detail-body');
+  const eqLabel = EQUIPMENT_LABEL[r.equipment] || '드라이룸';
+  const eqBadgeCls = r.equipment === 'xrd' ? 'badge-equipment-xrd' : 'badge-equipment-dryroom';
   body.innerHTML = `
+    <div class="detail-info"><label>장비</label><p><span class="badge ${eqBadgeCls}">${eqLabel}</span></p></div>
     <div class="detail-info"><label>예약자</label><p>${escapeHtml(r.user_name)}</p></div>
     <div class="detail-info"><label>지도교수</label><p>${escapeHtml(r.advisor)}</p></div>
     <div class="detail-info"><label>날짜</label><p>${r.date}</p></div>
@@ -920,7 +997,7 @@ async function loadAdminUsers() {
           <td>${u.created_at ? u.created_at.split(' ')[0] : ''}</td>
           <td>
             <button class="btn-sm btn-approve" onclick="approveUser(${u.id})">승인</button>
-            <button class="btn-sm btn-reject" onclick="rejectUser(${u.id}, '${escapeHtml(u.name)}')">거절</button>
+            <button class="btn-sm btn-reject" onclick="rejectUser(${u.id}, '${escapeJsAttr(u.name)}')">거절</button>
           </td>
         </tr>
       `).join('');
@@ -932,7 +1009,7 @@ async function loadAdminUsers() {
         : '<span class="badge badge-pending">대기중</span>';
       const actions = u.role === 'admin' ? '-' :
         (!u.approved ? `<button class="btn-sm btn-approve" onclick="approveUser(${u.id})">승인</button>` : '') +
-        `<button class="btn-sm btn-reject" onclick="rejectUser(${u.id}, '${escapeHtml(u.name)}')">삭제</button>`;
+        `<button class="btn-sm btn-reject" onclick="rejectUser(${u.id}, '${escapeJsAttr(u.name)}')">삭제</button>`;
       return `<tr>
         <td>${escapeHtml(u.name)}</td>
         <td>${escapeHtml(u.username)}</td>
@@ -959,18 +1036,22 @@ async function loadAdminReservations() {
     const rows = await api(`/api/admin/reservations?${params}`);
     if (rows.length === 0) {
       document.getElementById('reservations-tbody').innerHTML =
-        '<tr><td colspan="6" style="text-align:center; color:#999;">예약 내역이 없습니다.</td></tr>';
+        '<tr><td colspan="7" style="text-align:center; color:#999;">예약 내역이 없습니다.</td></tr>';
     } else {
-      document.getElementById('reservations-tbody').innerHTML = rows.map(r => `
+      document.getElementById('reservations-tbody').innerHTML = rows.map(r => {
+        const eqLabel = EQUIPMENT_LABEL[r.equipment] || '드라이룸';
+        const eqBadgeCls = r.equipment === 'xrd' ? 'badge-equipment-xrd' : 'badge-equipment-dryroom';
+        return `
         <tr data-user-color style="--user-color:${getUserColor(r.user_id)}">
           <td>${r.date}</td>
           <td>${r.start_time} ~ ${r.end_time}</td>
+          <td><span class="badge ${eqBadgeCls}">${eqLabel}</span></td>
           <td><span class="color-legend-dot" style="background:${getUserColor(r.user_id)};display:inline-block;vertical-align:middle;margin-right:4px"></span>${escapeHtml(r.user_name)}</td>
           <td>${escapeHtml(r.advisor)}</td>
           <td>${escapeHtml(r.purpose || '-')}</td>
           <td><button class="btn-sm btn-delete-res" onclick="adminDeleteReservation(${r.id})">삭제</button></td>
         </tr>
-      `).join('');
+      `}).join('');
     }
   } catch {}
 }
